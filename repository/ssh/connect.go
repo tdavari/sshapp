@@ -34,13 +34,15 @@ type Device struct {
 	Credentials Credentials `mapstructure:"credentials"`
 	Os          string      `mapstructure:"os"`
 	Type        string      `mapstructure:"type"`
+	Client      *ssh.Client
 }
 
 type Devices struct {
 	Devices []Device `mapstructure:"devices"`
 }
 
-func (d Device) ConnectViaJump(j *ssh.Client) (*ssh.Client, error) {
+func (d *Device) ConnectViaJump(j *ssh.Client) error {
+	println("hi there")
 	addr := d.Connections.Cli.Ip + ":" + d.Connections.Cli.Port
 	conn, err := j.Dial("tcp", addr)
 	if err != nil {
@@ -61,72 +63,35 @@ func (d Device) ConnectViaJump(j *ssh.Client) (*ssh.Client, error) {
 	}
 
 	sClient := ssh.NewClient(ncc, chans, reqs)
-	return sClient, err
+	d.Client = sClient
+
+	return err
 }
 
-func (d Device) Connect() (*ssh.Client, error) {
+func (d *Device) Connect() error {
 	addr := d.Connections.Cli.Ip + ":" + d.Connections.Cli.Port
 	jumpClient, err := createSSHClient(addr, d.Credentials.Default.Username, d.Credentials.Default.Password)
-	return jumpClient, err
+
+	d.Client = jumpClient
+
+	return err
 }
 
-// func ConnectViaJump(d []Device, j Device) {
-// 	// Create an SSH client to the jump box
-// 	jaddr := j.Connections.Cli.Ip + ":" + j.Connections.Cli.Port
-// 	jumpClient, err := createSSHClient(jaddr, j.Credentials.Default.Username, j.Credentials.Default.Password)
-// 	if err != nil {
-// 		log.Fatalf("Failed to connect to jump box: %v", err)
-// 	}
-// 	defer jumpClient.Close()
+func (d *Device) IsConnected() bool {
+	// Check if the client is not nil
+	if d.Client == nil {
+		return false
+	}
 
-// 	// Loop through each switch and execute show run command concurrently
-// 	for _, host := range d {
+	// Attempt to create a new SSH session
+	_, err := d.Client.NewSession()
+	if err != nil {
+		return false // If session creation fails, return false
+	}
 
-// 		haddr := host.Connections.Cli.Ip + ":" + host.Connections.Cli.Port
-
-// 		conn, err := jumpClient.Dial("tcp", haddr)
-// 		if err != nil {
-// 			log.Fatal(err)
-// 		}
-
-// 		config := &ssh.ClientConfig{
-// 			User: host.Credentials.Default.Username,
-// 			Auth: []ssh.AuthMethod{
-// 				ssh.Password(host.Credentials.Default.Password),
-// 			},
-// 			HostKeyCallback: ssh.InsecureIgnoreHostKey(), // Skip host key verification
-// 		}
-
-// 		ncc, chans, reqs, err := ssh.NewClientConn(conn, haddr, config)
-// 		if err != nil {
-// 			log.Fatal(err)
-// 		}
-
-// 		sClient := ssh.NewClient(ncc, chans, reqs)
-
-// 		// _, err = executeCommand(sClient, "terminal width 0")
-// 		// if err != nil {
-// 		// 	log.Printf("Failed to execute terminal width 0 on switch %s: %v", host, err)
-// 		// 	return
-// 		// }
-// 		_, err = executeCommand(sClient, "terminal length 0")
-// 		if err != nil {
-// 			log.Printf("Failed to execute terminal length 0 on switch %s: %v", host, err)
-// 			return
-// 		}
-// 		// Execute the show run command on the switch
-// 		output, err := executeCommand(sClient, "show run")
-// 		if err != nil {
-// 			log.Printf("Failed to execute command on switch %s: %v", host, err)
-// 			return
-// 		}
-
-// 		// Print the output of the command
-// 		fmt.Printf("Output from switch %s:\n%s\n", host, output)
-
-// 	}
-
-// }
+	// If no error occurs during session creation, the SSH connection is still open
+	return true
+}
 
 // createSSHClient establishes an SSH connection to the given host using username and password authentication
 func createSSHClient(host, user, password string) (*ssh.Client, error) {
@@ -141,8 +106,8 @@ func createSSHClient(host, user, password string) (*ssh.Client, error) {
 }
 
 // executeCommand executes the given command on the SSH client and returns the output
-func ExecuteCommand(client *ssh.Client, command string) (string, error) {
-	session, err := client.NewSession()
+func (d *Device) ExecuteCommand(command string) (string, error) {
+	session, err := d.Client.NewSession()
 	if err != nil {
 		return "", err
 	}

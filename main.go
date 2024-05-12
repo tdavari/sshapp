@@ -15,23 +15,27 @@ func main() {
 	fmt.Printf("%+v\n", devices)
 
 	// ssh.ConnectViaJump(devices[1:], devices[0])
-	jumpbox, err := devices[0].Connect()
+	err := devices[0].Connect()
 	if err != nil {
 		panic(err)
 	}
 
 	var wg sync.WaitGroup
 
-	for _, d := range devices[2:] {
+	for _, d := range devices[1:] {
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sw, err := d.ConnectViaJump(jumpbox)
+			if d.IsConnected() = false{
+				err := d.ConnectViaJump(devices[0].Client)
+			}
+			
+
 			if err != nil {
 				panic(err)
 			}
-			output, err := ssh.ExecuteCommand(sw, "show clock")
+			output, err := d.ExecuteCommand("show clock")
 			if err != nil {
 				panic(err)
 			}
@@ -39,4 +43,29 @@ func main() {
 		}()
 	}
 	wg.Wait()
+	println(devices[1].IsConnected())
+	println(devices[2].IsConnected())
+	println(devices[0].IsConnected())
+
+	for _, d := range devices[1:] {
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := d.ConnectViaJump(devices[0].Client)
+
+			if err != nil {
+				panic(err)
+			}
+			output, err := d.ExecuteCommand("show clock")
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(output)
+		}()
+	}
+	wg.Wait()
+	println(devices[1].IsConnected())
+	println(devices[2].IsConnected())
+	println(devices[0].IsConnected())
 }
